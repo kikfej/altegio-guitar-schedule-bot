@@ -1,59 +1,132 @@
-# Бот мониторинга расписания уроков гитары (Altegio + Telegram)
+# Altegio Guitar Schedule Bot
 
-Программный модуль на языке Python для отслеживания расписания уроков игры на гитаре на платформе **Altegio** и автоматизации оповещений в **Telegram**.
+A lightweight Python service and Telegram bot designed to monitor guitar lesson schedules via the **Altegio REST API**, track booking changes (new, rescheduled, or cancelled lessons), and send automated reminders and notifications in **Telegram**.
 
-## Возможности проекта
-- **Просмотр расписания (`/schedule`)** — загрузка актуальных записей из Altegio API.
-- **Напоминания о ближайших занятиях (`/upcoming`)** — фильтр уроков на ближайшие 24 часа.
-- **Отслеживание изменений (`/check` и авто-мониторинг)** — сравнение текущего расписания с локальным кэшем (`schedule_cache.json`) и уведомление о новых, перенесенных или отмененных уроках.
-- **Демонстрационный режим** — если токены Altegio не указаны в `.env`, бот автоматически работает на тестовых данных.
+## Features
 
-## Структура проекта
-- `config.py` — загрузка токенов и настроек из переменных окружения (`.env`).
-- `altegio_api.py` — HTTP-запросы к API Altegio через библиотеку `requests` с обработкой сетевых ошибок.
-- `logic.py` — сохранение кэша в JSON, поиск изменений в расписании, фильтрация по датам и форматирование текста.
-- `bot.py` — обработчики команд Telegram (`pyTelegramBotAPI`) и фоновый поток мониторинга.
-- `test_logic.py` — модульные тесты ключевой логики на `pytest`.
+- **Real-Time Schedule Viewing (`/schedule`)** — Fetches and formats current lesson bookings directly from the Altegio API.
+- **Upcoming Lesson Reminders (`/upcoming`)** — Filters and displays lessons scheduled within the next 24 hours.
+- **Change Detection (`/check` & Background Monitor)** — Compares live schedule data against a local JSON cache (`schedule_cache.json`) to detect newly added, rescheduled, or cancelled appointments.
+- **Automated Background Polling** — Runs a dedicated background thread that periodically checks Altegio for updates and pushes instant alerts to the administrator's Telegram chat.
+- **Built-in Demo Mode** — Automatically falls back to realistic sample data when Altegio API credentials are not configured, allowing instant local testing and demonstration.
 
-## Установка и запуск
+## Project Structure
 
-1. Клонируйте репозиторий и перейдите в папку проекта:
-   ```bash
-   git clone <ссылка_на_ваш_репозиторий>
-   cd guitar_schedule_bot
-   ```
+```text
+.
+├── bot.py             # Entry point: Telegram bot command handlers and background polling thread
+├── altegio_api.py     # HTTP client for fetching booking records from the Altegio API (with demo fallback)
+├── logic.py           # Core business logic: JSON caching, schedule diffing, date filtering, text formatting
+├── config.py          # Environment variable loader and configuration settings
+├── test_logic.py      # Unit test suite (pytest) covering core schedule logic
+├── requirements.txt   # Project dependencies
+├── .gitignore         # Git exclusion rules for secrets, cache, and virtual environments
+└── README.md          # Project documentation
+```
 
-2. Создайте и активируйте виртуальное окружение:
-   ```bash
-   python -m venv .venv
-   # Linux / macOS:
-   source .venv/bin/activate
-   # Windows:
-   .venv\Scripts\Activate.ps1
-   ```
+## Tech Stack
 
-3. Установите зависимости из `requirements.txt`:
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **Python 3.10+**
+- **pyTelegramBotAPI (`telebot`)** — Synchronous Telegram Bot API wrapper
+- **Requests** — HTTP library for interacting with the Altegio REST API
+- **python-dotenv** — Environment variable management from `.env` files
+- **pytest** — Unit testing framework
 
-4. Создайте в корне проекта файл `.env` и укажите ваши данные:
-   ```env
-   TELEGRAM_BOT_TOKEN=ваш_токен_от_BotFather
-   ADMIN_CHAT_ID=ваш_id_в_телеграм
-   ALTEGIO_PARTNER_TOKEN=ваш_партнерский_токен
-   ALTEGIO_USER_TOKEN=ваш_токен_пользователя
-   ALTEGIO_COMPANY_ID=id_филиала
-   ```
+## Quick Start (Copy & Paste)
 
-5. Запустите бота:
-   ```bash
-   python bot.py
-   ```
+### 1. Clone the Repository
 
-## Запуск тестов
+```bash
+git clone [https://github.com/YOUR_USERNAME/altegio-guitar-schedule-bot.git](https://github.com/YOUR_USERNAME/altegio-guitar-schedule-bot.git)
+cd altegio-guitar-schedule-bot
+```
 
-Для проверки корректности работы логики выполните:
+### 2. Create and Activate a Virtual Environment
+
+**Linux / macOS:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure Environment Variables
+
+Create a `.env` file in the project root directory:
+
+**Linux / macOS:**
+```bash
+cat << 'EOF' > .env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+ADMIN_CHAT_ID=your_telegram_chat_id_here
+ALTEGIO_PARTNER_TOKEN=your_altegio_partner_token
+ALTEGIO_USER_TOKEN=your_altegio_user_token
+ALTEGIO_COMPANY_ID=111111
+EOF
+```
+
+**Windows (PowerShell):**
+```powershell
+@"
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+ADMIN_CHAT_ID=your_telegram_chat_id_here
+ALTEGIO_PARTNER_TOKEN=your_altegio_partner_token
+ALTEGIO_USER_TOKEN=your_altegio_user_token
+ALTEGIO_COMPANY_ID=111111
+"@ | Out-File -FilePath .env -Encoding utf8
+```
+
+> **Note:** To obtain a `TELEGRAM_BOT_TOKEN`, message [@BotFather](https://t.me/BotFather) on Telegram and run `/newbot`. To run the bot in **Demo Mode** without Altegio credentials, leave `ALTEGIO_PARTNER_TOKEN=your_altegio_partner_token` as is.
+
+### 5. Run the Bot
+
+```bash
+python bot.py
+```
+
+## Usage Examples
+
+Once the bot is running, open your bot in Telegram and use the following commands:
+
+| Command | Description |
+| :--- | :--- |
+| `/start` or `/help` | Display welcome message and available commands |
+| `/myid` | Get your personal Telegram Chat ID (to set as `ADMIN_CHAT_ID` in `.env`) |
+| `/schedule` | Fetch and display the full guitar lesson schedule |
+| `/upcoming` | Show lessons starting within the next 24 hours |
+| `/check` | Manually check for schedule changes since the last snapshot |
+
+**Example Output (`/schedule`):**
+```text
+🎸 Расписание уроков игры на гитаре:
+1. 23.10.2026 в 14:00 — Алексей Смирнов (Электрогитара (индивидуальный урок))
+2. 24.10.2026 в 15:00 — Мария Иванова (Акустическая гитара (разбор песен))
+```
+
+**Example Change Alert (`/check` or Auto-Notification):**
+```text
+🔔 Обнаружены изменения в расписании Altegio!
+
+✅ Новые записи:
+🎸 Расписание уроков игры на гитаре:
+1. 25.10.2026 в 18:00 — Олег Петров (Укулеле)
+```
+
+## Running Tests
+
+The core schedule diffing, caching, and filtering functions are covered by unit tests using `pytest`. Run the test suite with:
+
 ```bash
 pytest -v
 ```
