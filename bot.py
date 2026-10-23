@@ -6,15 +6,13 @@ import config
 import altegio_api
 import logic
 
-# Создаем объект бота и передаем ему токен из модуля config (Требование курса)
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
 
 
 def build_changes_report() -> str | None:
     """
-    Вспомогательная функция: скачивает свежее расписание из Altegio,
-    сравнивает с сохраненным в JSON и возвращает текст отчета об изменениях.
-    Если изменений нет — возвращает None (Лекция 1 и 4).
+    Fetch current schedule, compare it with cached data, update the cache,
+    and return a formatted change report (or None if nothing changed).
     """
     new_lessons = altegio_api.fetch_lessons_from_altegio()
     if not new_lessons:
@@ -22,11 +20,8 @@ def build_changes_report() -> str | None:
 
     old_lessons = logic.load_saved_schedule()
     changes = logic.find_schedule_changes(old_lessons, new_lessons)
-
-    # Сохраняем актуальное расписание в JSON-файл (Лекция 13)
     logic.save_schedule(new_lessons)
 
-    # Если старого файла еще не было (первый запуск), уведомление не шлем
     if not old_lessons:
         return None
 
@@ -34,11 +29,9 @@ def build_changes_report() -> str | None:
     cancelled = changes["cancelled"]
     rescheduled = changes["rescheduled"]
 
-    # Если все три списка пусты, значит изменений не произошло (Лекция 1)
     if not added and not cancelled and not rescheduled:
         return None
 
-    # Собираем текст уведомления с помощью списка и f-строк (Лекция 2)
     report_lines: list[str] = ["🔔 Обнаружены изменения в расписании Altegio!"]
 
     if added:
@@ -54,10 +47,9 @@ def build_changes_report() -> str | None:
     return "\n".join(report_lines)
 
 
-# Декоратор из Лекции 11: привязывает функцию к командам /start и /help
 @bot.message_handler(commands=["start", "help"])
 def handle_start(message: telebot.types.Message) -> None:
-    """Приветствует пользователя и выводит список доступных команд."""
+    """Send welcome message and command list."""
     mode_note = (
         "\n⚠️ Сейчас включен Демо-режим (учебные данные)."
         if config.USE_DEMO_MODE
@@ -77,22 +69,23 @@ def handle_start(message: telebot.types.Message) -> None:
 
 @bot.message_handler(commands=["myid"])
 def handle_myid(message: telebot.types.Message) -> None:
-    """Показывает пользователю его ID чата в Telegram."""
+    """Reply with the user's Telegram Chat ID."""
     bot.reply_to(message, f"Твой Chat ID: {message.chat.id}")
 
 
 @bot.message_handler(commands=["schedule"])
 def handle_schedule(message: telebot.types.Message) -> None:
-    """Загружает и отправляет полное расписание уроков."""
+    """Fetch and reply with the full lesson schedule."""
     lessons = altegio_api.fetch_lessons_from_altegio()
-    logic.save_schedule(lessons)
+    if lessons:
+        logic.save_schedule(lessons)
     text = logic.format_schedule_text(lessons)
     bot.reply_to(message, text)
 
 
 @bot.message_handler(commands=["upcoming"])
 def handle_upcoming(message: telebot.types.Message) -> None:
-    """Показывает занятия на ближайшие 24 часа (напоминание)."""
+    """Reply with lessons starting within the next 24 hours."""
     lessons = altegio_api.fetch_lessons_from_altegio()
     upcoming = logic.get_upcoming_lessons(lessons, hours_ahead=24)
     if not upcoming:
@@ -105,7 +98,7 @@ def handle_upcoming(message: telebot.types.Message) -> None:
 
 @bot.message_handler(commands=["check"])
 def handle_check(message: telebot.types.Message) -> None:
-    """Вручную проверяет, изменилось ли расписание с момента прошлой проверки."""
+    """Manually trigger a schedule change check."""
     report = build_changes_report()
     if report is None:
         bot.reply_to(message, "Изменений в расписании не обнаружено. Все актуально!")
@@ -113,10 +106,9 @@ def handle_check(message: telebot.types.Message) -> None:
         bot.reply_to(message, report)
 
 
-# Обработчик любых других текстовых сообщений (Требование курса: не падать на вводе)
 @bot.message_handler(content_types=["text"])
 def handle_unknown_text(message: telebot.types.Message) -> None:
-    """Вежливо отвечает на неизвестные команды и обычный текст."""
+    """Handle unrecognized text messages gracefully."""
     bot.reply_to(
         message,
         "Я понимаю только команды расписания. Напиши /help, чтобы увидеть список команд.",
@@ -124,39 +116,33 @@ def handle_unknown_text(message: telebot.types.Message) -> None:
 
 
 def auto_monitor(interval_seconds: int = 300) -> None:
-    """
-    Фоновая функция (Шаг 5): каждые interval_seconds секунд проверяет
-    расписание в Altegio и отправляет уведомление администратору в Telegram.
-    """
-    # Бесконечный цикл while (Лекция 2)
+    """Periodically check Altegio for schedule updates and notify the admin."""
     while True:
-        # Оборачиваем в try...except Exception (Лекция 7), чтобы фоновый поток не упал
         try:
-            if config.ADMIN_CHAT_ID and config.ADMIN_CHAT_ID != "123456789":
+            admin_id = config.ADMIN_CHAT_ID
+            if admin_id and admin_id != "123456789" and not admin_id.startswith("your_"):
                 report = build_changes_report()
                 if report is not None:
-                    bot.send_message(config.ADMIN_CHAT_ID, report)
+                    bot.send_message(admin_id, report)
         except Exception as error:
-            print(f"Ошибка в фоновом мониторинге: {error}")
+            print(f"Background monitor error: {error}")
 
-        # Пауза перед следующей проверкой (time.sleep из Лекции 7)
         time.sleep(interval_seconds)
 
 
 def main() -> None:
-    """Точка входа в программу (Лекция 11)."""
-    if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_BOT_TOKEN == "тут_будет_токен_телеграм":
-        print("ОШИБКА: Укажи реальный TELEGRAM_BOT_TOKEN в файле .env!")
+    """Validate configuration and start the Telegram bot."""
+    token = config.TELEGRAM_BOT_TOKEN
+    if not token or token.startswith("тут_") or token.startswith("your_"):
+        print("Error: Please set a valid TELEGRAM_BOT_TOKEN in your .env file.")
         return
 
-    # Запускаем фоновую проверку расписания в отдельном потоке
     monitor_thread = threading.Thread(target=auto_monitor, daemon=True)
     monitor_thread.start()
 
-    print("Бот успешно запущен! Для остановки нажми Ctrl+C в терминале.")
-    bot.infinity_polling()
+    print("Bot is running. Press Ctrl+C to stop.")
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
 
 
-# Конструкция из Лекции 11: код запустится только при прямом запуске файла bot.py
 if __name__ == "__main__":
     main()
